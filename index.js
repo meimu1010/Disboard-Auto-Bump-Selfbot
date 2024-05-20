@@ -1,28 +1,55 @@
-require('dotenv').config()
-const { Client } = require('discord.js-selfbot-v13')
-const client = new Client()
+require('dotenv').config();
+const { Client } = require('discord.js-selfbot-v13');
+const client = new Client();
 
 client.on('ready', async () => {
-    console.log(`Logged in as ${client.user.tag}!`)
+    console.log(`Logged in as ${client.user.tag}!`);
 
-    const channel = await client.channels.fetch(process.env.BUMP_CHANNEL)
-    
+    // ステータスの設定
+    client.user.setPresence({
+        activities: [{
+            name: 'Monitoring bumps and dissokus',
+            type: 'WATCHING', // 他に'PLAYING', 'LISTENING', 'STREAMING'などがある
+        }],
+        status: 'online', // 'online', 'idle', 'dnd'（Do Not Disturbの略）, 'invisible'のいずれか
+    });
+
+    const bumpChannel = await client.channels.fetch(process.env.BUMP_CHANNEL);
+    const dissokuChannel = await client.channels.fetch(process.env.DISSOKU_CHANNEL);
+
     async function bump() {
-        await channel.sendSlash('302050872383242240', 'bump')
-        console.count('Bumped!')
+        await bumpChannel.sendSlash('302050872383242240', 'bump');
+        console.count('Bumped!');
     }
 
-    function loop() {
-        // send bump message every 2-3 hours, to prevent detection.
-        var randomNum = Math.round(Math.random() * (9000000 - 7200000 + 1)) + 7200000
+    async function dissoku() {
+        await dissokuChannel.sendSlash('761562078095867916', 'dissoku up');
+        console.count('Dissoku Upped!');
+    }
+
+    function bumpLoop() {
+        // 2時間ごとに送信
+        const interval = (2 * 60 * 60 * 1000) + (1 * 60 * 1000); // ミリ秒でのインターバル
         setTimeout(function () {
-            bump()
-            loop()
-        }, randomNum)
+            bump();
+            bumpLoop();
+        }, interval);
+    }
+
+    function dissokuLoop() {
+        // 1時間ごとに送信
+        const interval = (1 * 60 * 60 * 1000) + (1 * 60 * 1000); // ミリ秒でのインターバル
+        setTimeout(function () {
+            dissoku();
+            dissokuLoop();
+        }, interval);
     }
     
-    bump()
-    loop()
-})
+    bump();
+    bumpLoop();
+    
+    dissoku();
+    dissokuLoop();
+});
 
-client.login(process.env.TOKEN)
+client.login(process.env.TOKEN);
