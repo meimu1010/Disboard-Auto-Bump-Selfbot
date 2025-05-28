@@ -8,48 +8,71 @@ client.on('ready', async () => {
     // ステータスの設定
     client.user.setPresence({
         activities: [{
-            name: 'Monitoring bumps and dissokus',
+            name: 'Monitoring bumps, dissokus, dicoalls',
             type: 'WATCHING', // 他に'PLAYING', 'LISTENING', 'STREAMING'などがある
         }],
-        status: 'online', // 'online', 'idle', 'dnd'（Do Not Disturbの略）, 'invisible'のいずれか
+        status: 'idle', // 'online', 'idle', 'dnd'（Do Not Disturbの略）, 'invisible'のいずれか
     });
 
-    const bumpChannel = await client.channels.fetch(process.env.BUMP_CHANNEL);
-    const dissokuChannel = await client.channels.fetch(process.env.DISSOKU_CHANNEL);
+    const bumpChannels = process.env.BUMP_CHANNELS.split(',').map(id => id.trim());
+    const dissokuChannels = process.env.DISSOKU_CHANNELS.split(',').map(id => id.trim());
+    const dicoallChannels = process.env.DICOALL_CHANNELS.split(',').map(id => id.trim());
+    const dcafeChannels = process.env.DCAFE_CHANNELS.split(',').map(id => id.trim()); // DCafeのチャンネルIDリスト
 
-    async function bump() {
-        await bumpChannel.sendSlash('302050872383242240', 'bump');
-        console.count('Bumped!');
+    function getCurrentTime() {
+        const now = new Date();
+        return now.toLocaleString(); // 現在の日時を読みやすい形式で返す
     }
 
-    async function dissoku() {
-        await dissokuChannel.sendSlash('761562078095867916', 'dissoku up');
-        console.count('Dissoku Upped!');
+    async function executeCommand(channels, commandId, commandName) {
+        for (const [index, channelId] of channels.entries()) {
+            try {
+                const channel = await client.channels.fetch(channelId);
+                await channel.sendSlash(commandId, commandName);
+                const guild = channel.guild;
+                console.log(`[${getCurrentTime()}] ${commandName} executed in server: ${guild.name}`);
+                if (commandName === 'bump' && index === 1) {
+                    // 2つ目のサーバーに対して30分後に再度実行
+                    setTimeout(async () => {
+                        try {
+                            await channel.sendSlash(commandId, commandName);
+                            console.log(`[${getCurrentTime()}] ${commandName} executed again in server: ${guild.name} after 30 minutes`);
+                        } catch (error) {
+                            console.error(`[${getCurrentTime()}] Error executing ${commandName} again in server: ${guild.name} after 30 minutes`, error);
+                        }
+                    }, 30 * 60 * 1000); // 30分後
+                }
+            } catch (error) {
+                console.error(`[${getCurrentTime()}] Error executing ${commandName} in channel: ${channelId}`, error);
+            }
+        }
     }
 
-    function bumpLoop() {
-        // 2時間ごとに送信
-        const interval = (2 * 60 * 60 * 1000) + (1 * 60 * 1000); // ミリ秒でのインターバル
-        setTimeout(function () {
-            bump();
-            bumpLoop();
+    function startLoop(interval, func) {
+        setTimeout(async function loop() {
+            await func();
+            setTimeout(loop, interval);
         }, interval);
     }
 
-    function dissokuLoop() {
-        // 1時間ごとに送信
-        const interval = (1 * 60 * 60 * 1000) + (1 * 60 * 1000); // ミリ秒でのインターバル
-        setTimeout(function () {
-            dissoku();
-            dissokuLoop();
-        }, interval);
+    const INTERVALS = {
+        bump: (2 * 60 * 60 * 1000) + (3 * 1000), // 2時間+1分
+        dissoku: (1 * 60 * 60 * 1000) + (3 * 1000), // 1時間+1分
+        dicoall: (1 * 60 * 60 * 1000) + (3 * 1000), // 1時間+1分
+        dcafe: (1 * 60 * 60 * 1000) + (3 * 1000), // 1時間+1分
+    };
+
+    const COMMANDS = [
+        { channels: bumpChannels, id: '302050872383242240', name: 'bump', interval: INTERVALS.bump },
+        { channels: dissokuChannels, id: '761562078095867916', name: 'dissoku up', interval: INTERVALS.dissoku },
+        { channels: dicoallChannels, id: '903541413298450462', name: 'up', interval: INTERVALS.dicoall },
+        { channels: dcafeChannels, id: '850493201064132659', name: 'up', interval: INTERVALS.dcafe }, // DCafe用
+    ];
+
+    for (const { channels, id, name, interval } of COMMANDS) {
+        executeCommand(channels, id, name);
+        startLoop(interval, () => executeCommand(channels, id, name));
     }
-    
-    bump();
-    bumpLoop();
-    
-    dissoku();
-    dissokuLoop();
 });
 
 client.login(process.env.TOKEN);
